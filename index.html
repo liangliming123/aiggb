@@ -1,0 +1,2239 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>高中数学 AI + GeoGebra 智能动态作图工作台</title>
+  
+  <!-- 稳定 CDN：Vue 3 -->
+  <script src="https://cdn.jsdelivr.net/npm/vue@3.4.21/dist/vue.global.prod.js"></script>
+
+  <!-- 官方 GeoGebra 核心引擎 -->
+  <script src="https://www.geogebra.org/apps/deployggb.js"></script>
+
+  <style>
+    * { 
+      box-sizing: border-box; 
+      margin: 0; 
+      padding: 0; 
+      -webkit-user-select: none;
+      -moz-user-select: none;
+      -ms-user-select: none;
+      user-select: none;
+    }
+    input, textarea {
+      -webkit-user-select: text;
+      -moz-user-select: text;
+      -ms-user-select: text;
+      user-select: text;
+    }
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      background: #f1f5f9;
+      color: #0f172a;
+    }
+    #app {
+      display: flex;
+      flex-direction: column;
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    /* 顶部导航与配置栏 */
+    .top-header {
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 16px;
+      background: #ffffff;
+      border-bottom: 1px solid #e2e8f0;
+      font-size: 13px;
+      z-index: 20;
+      flex-wrap: wrap;
+    }
+    .logo-box {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-weight: 700;
+      color: #2563eb;
+      font-size: 15px;
+      margin-right: 6px;
+    }
+    .config-group { display: flex; align-items: center; gap: 5px; }
+    .config-group label { font-weight: 600; color: #475569; font-size: 12px; }
+    .config-group select, .config-group input {
+      padding: 4px 8px;
+      border: 1px solid #cbd5e1;
+      border-radius: 4px;
+      font-size: 12px;
+      outline: none;
+      background: #f8fafc;
+    }
+    .config-group input:focus, .config-group select:focus {
+      border-color: #3b82f6;
+      background: #fff;
+    }
+    .model-field { width: 150px; }
+    .depth-field { width: 140px; font-weight: 500; }
+    .key-field { width: 140px; }
+    .header-actions { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+    .btn-test {
+      background: #f1f5f9;
+      border: 1px solid #cbd5e1;
+      padding: 4px 10px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 500;
+      transition: all 0.2s;
+    }
+    .btn-test:hover { background: #e2e8f0; }
+    .status-tag { font-size: 12px; font-weight: 600; }
+    .status-tag.pass { color: #16a34a; }
+    .status-tag.fail { color: #dc2626; }
+
+    /* 主工作区 */
+    .main-workspace {
+      flex: 1;
+      display: flex;
+      min-height: 0;
+      overflow: hidden;
+      position: relative;
+    }
+
+    /* 左侧控制面板 */
+    .control-pane {
+      width: 42%;
+      min-width: 410px;
+      max-width: 560px;
+      border-right: 1px solid #e2e8f0;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      padding: 12px;
+      overflow-y: auto;
+      background: #f8fafc;
+    }
+
+    /* 模式栏与上下文管理 */
+    .mode-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: #ffffff;
+      padding: 6px 10px;
+      border-radius: 6px;
+      border: 1px solid #e2e8f0;
+    }
+    .mode-toggle-group {
+      display: flex;
+      align-items: center;
+      background: #f1f5f9;
+      padding: 2px;
+      border-radius: 6px;
+      border: 1px solid #cbd5e1;
+      gap: 3px;
+    }
+    .mode-btn {
+      border: none;
+      background: transparent;
+      padding: 4px 10px;
+      border-radius: 4px;
+      font-size: 11.5px;
+      font-weight: 600;
+      color: #64748b;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .mode-btn:hover { color: #0f172a; }
+    .mode-btn.active {
+      background: #ffffff;
+      color: #2563eb;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+    }
+    .context-ctrl {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 11.5px;
+    }
+    .context-badge {
+      background: #e0e7ff;
+      color: #3730a3;
+      padding: 2px 6px;
+      border-radius: 10px;
+      font-size: 11px;
+      font-weight: 700;
+    }
+    .btn-clear-ctx {
+      background: none;
+      border: 1px solid #cbd5e1;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 11px;
+      cursor: pointer;
+      color: #475569;
+    }
+    .btn-clear-ctx:hover { background: #fee2e2; color: #dc2626; border-color: #fca5a5; }
+
+    /* 典型高中数学案例库 */
+    .preset-container { display: flex; flex-direction: column; gap: 4px; }
+    .preset-title { font-size: 11.5px; font-weight: 600; color: #475569; }
+    .preset-select {
+      width: 100%;
+      padding: 6px 8px;
+      border: 1px solid #cbd5e1;
+      border-radius: 5px;
+      font-size: 11.5px;
+      background: #ffffff;
+      outline: none;
+      color: #1e293b;
+      cursor: pointer;
+    }
+    .preset-select:focus { border-color: #3b82f6; }
+
+    /* 输入区与多模态面板 */
+    .prompt-box { display: flex; flex-direction: column; gap: 6px; }
+    .prompt-box textarea {
+      width: 100%;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      padding: 8px 10px;
+      font-size: 12.5px;
+      line-height: 1.45;
+      resize: vertical;
+      outline: none;
+      background: #fff;
+    }
+    .prompt-box textarea:focus { border-color: #3b82f6; box-shadow: 0 0 0 2px rgba(59,130,246,0.1); }
+    
+    .multimodal-bar {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .tool-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 3px 8px;
+      border-radius: 4px;
+      border: 1px solid #cbd5e1;
+      background: #ffffff;
+      font-size: 11px;
+      color: #334155;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .tool-btn:hover { background: #f1f5f9; border-color: #94a3b8; }
+    .tool-btn.recording {
+      background: #fef2f2;
+      border-color: #f87171;
+      color: #dc2626;
+      animation: pulse 1.2s infinite;
+    }
+    @keyframes pulse {
+      0% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.4); }
+      70% { box-shadow: 0 0 0 6px rgba(220, 38, 38, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0); }
+    }
+    .image-preview-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 6px;
+      background: #eff6ff;
+      border: 1px solid #bfdbfe;
+      border-radius: 4px;
+      font-size: 11px;
+      color: #1d4ed8;
+    }
+    .img-del-btn { cursor: pointer; font-weight: bold; color: #dc2626; }
+
+    .btn-compile-row { display: flex; gap: 8px; }
+    .btn-compile {
+      flex: 1;
+      background: #2563eb;
+      color: white;
+      border: none;
+      padding: 8px 12px;
+      border-radius: 6px;
+      font-weight: 600;
+      font-size: 12.5px;
+      cursor: pointer;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 6px;
+      transition: background 0.2s;
+    }
+    .btn-compile:hover { background: #1d4ed8; }
+    .btn-compile:disabled { background: #94a3b8; cursor: not-allowed; }
+    .btn-compile.incremental { background: #059669; }
+    .btn-compile.incremental:hover { background: #047857; }
+
+    .spinner {
+      width: 12px;
+      height: 12px;
+      border: 2px solid #bfdbfe;
+      border-top-color: #2563eb;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* 通用卡片容器 */
+    .card-block {
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      border-radius: 6px;
+      padding: 10px;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.02);
+    }
+    .card-block h4 { font-size: 12.5px; margin-bottom: 6px; color: #1e293b; display: flex; justify-content: space-between; align-items: center; }
+
+    /* 思考进程监控与资源开销面板 */
+    .monitor-card {
+      background: #ffffff;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      padding: 10px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .monitor-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .monitor-title {
+      font-size: 12px;
+      font-weight: 700;
+      color: #1e293b;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .pulse-indicator {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #10b981;
+      display: inline-block;
+    }
+    .pulse-indicator.active {
+      background: #3b82f6;
+      animation: pulseDot 1s infinite;
+    }
+    .pulse-indicator.warning {
+      background: #f59e0b;
+      animation: pulseDot 0.6s infinite;
+    }
+    @keyframes pulseDot {
+      0% { transform: scale(0.9); opacity: 0.7; }
+      50% { transform: scale(1.3); opacity: 1; }
+      100% { transform: scale(0.9); opacity: 0.7; }
+    }
+    .stage-badge {
+      font-size: 11px;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 12px;
+      background: #f1f5f9;
+      color: #475569;
+    }
+    .stage-badge.running { background: #dbeafe; color: #1d4ed8; }
+    .stage-badge.fixing { background: #fef3c7; color: #b45309; }
+    .stage-badge.done { background: #dcfce7; color: #15803d; }
+
+    .monitor-grid {
+      display: grid;
+      grid-template-columns: 1.6fr 1fr 1fr;
+      gap: 8px;
+      background: #f8fafc;
+      padding: 8px;
+      border-radius: 4px;
+      border: 1px solid #e2e8f0;
+    }
+    .grid-col { display: flex; flex-direction: column; gap: 2px; }
+    .col-label { font-size: 10.5px; color: #64748b; }
+    .col-val {
+      font-size: 12px;
+      font-weight: 600;
+      color: #0f172a;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .col-val.mono { font-family: ui-monospace, Menlo, Consolas, monospace; }
+
+    .progress-track {
+      width: 100%;
+      height: 4px;
+      background: #e2e8f0;
+      border-radius: 2px;
+      overflow: hidden;
+    }
+    .progress-fill {
+      height: 100%;
+      background: #2563eb;
+      transition: width 0.25s ease;
+    }
+    .progress-fill.fixing { background: #f59e0b; }
+    .progress-fill.done { background: #16a34a; }
+
+    /* 指令管理模块 */
+    .command-header-actions { display: flex; align-items: center; gap: 4px; }
+    .cmd-btn-small {
+      background: #f8fafc;
+      border: 1px solid #cbd5e1;
+      color: #334155;
+      font-size: 11px;
+      padding: 2px 6px;
+      border-radius: 3px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .cmd-btn-small:hover { background: #e2e8f0; }
+    .cmd-btn-small.primary { background: #2563eb; color: #fff; border-color: #2563eb; }
+    .cmd-btn-small.primary:hover { background: #1d4ed8; }
+
+    .command-list-container {
+      list-style: none;
+      max-height: 220px;
+      overflow-y: auto;
+      margin-top: 6px;
+      border: 1px solid #e2e8f0;
+      border-radius: 4px;
+      background: #fafafa;
+    }
+    .command-item {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      padding: 3px 5px;
+      border-bottom: 1px solid #f1f5f9;
+      background: #ffffff;
+    }
+    .command-item.is-selected { background: #fffbeb; }
+    .command-item:last-child { border-bottom: none; }
+    .cmd-checkbox { cursor: pointer; }
+    .cmd-status-icon {
+      font-size: 11px;
+      font-weight: bold;
+      width: 14px;
+      text-align: center;
+    }
+    .cmd-status-icon.pass { color: #16a34a; }
+    .cmd-status-icon.fail { color: #dc2626; }
+    .cmd-input-field {
+      flex: 1;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 11px;
+      padding: 3px 5px;
+      border: 1px solid #e2e8f0;
+      border-radius: 3px;
+      outline: none;
+      background: #ffffff;
+      color: #0f172a;
+    }
+    .cmd-input-field:focus { border-color: #3b82f6; background: #f8fafc; }
+    .cmd-actions { display: flex; align-items: center; gap: 2px; }
+    .cmd-action-icon {
+      border: none;
+      background: transparent;
+      cursor: pointer;
+      font-size: 11px;
+      padding: 2px 4px;
+      border-radius: 3px;
+      color: #64748b;
+    }
+    .cmd-action-icon:hover { background: #f1f5f9; color: #0f172a; }
+    .cmd-action-icon.fix:hover { background: #fee2e2; color: #dc2626; }
+    .cmd-action-icon.del:hover { background: #fee2e2; color: #dc2626; }
+
+    /* 定向修复专属控制栏 */
+    .quick-repair-bar {
+      margin-top: 6px;
+      padding: 6px 8px;
+      background: #fff1f2;
+      border: 1px dashed #fecdd3;
+      border-radius: 4px;
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+    .quick-repair-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 11.5px;
+      color: #9f1239;
+      font-weight: 600;
+    }
+    .quick-repair-inputs { display: flex; gap: 5px; }
+    .repair-hint-input {
+      flex: 1;
+      padding: 4px 6px;
+      font-size: 11px;
+      border: 1px solid #fca5a5;
+      border-radius: 3px;
+      outline: none;
+      background: #fff;
+    }
+    .repair-hint-input:focus { border-color: #dc2626; }
+    .btn-do-repair {
+      background: #e11d48;
+      color: #fff;
+      border: none;
+      padding: 4px 10px;
+      border-radius: 3px;
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      white-space: nowrap;
+    }
+    .btn-do-repair:hover { background: #be123c; }
+    .btn-do-repair:disabled { background: #fda4af; cursor: not-allowed; }
+
+    .add-command-bar { display: flex; gap: 5px; margin-top: 6px; }
+    .add-command-input {
+      flex: 1;
+      padding: 4px 7px;
+      font-size: 11.5px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      border: 1px solid #cbd5e1;
+      border-radius: 4px;
+      outline: none;
+    }
+    .add-command-input:focus { border-color: #2563eb; }
+    .btn-add-cmd {
+      background: #0f172a;
+      color: #ffffff;
+      border: none;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 11.5px;
+      font-weight: 500;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .btn-add-cmd:hover { background: #334155; }
+
+    /* 历史记录 */
+    .history-list { display: flex; flex-direction: column; gap: 3px; max-height: 90px; overflow-y: auto; }
+    .history-item {
+      padding: 3px 6px;
+      background: #f8fafc;
+      border-radius: 3px;
+      font-size: 11px;
+      cursor: pointer;
+      display: flex;
+      justify-content: space-between;
+      color: #475569;
+    }
+    .history-item:hover { background: #e2e8f0; color: #0f172a; }
+
+    /* 右侧 GGB 画布视图 */
+    .canvas-pane {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      background: #ffffff;
+      position: relative;
+    }
+
+    /* 铺满视口的无缝全屏 */
+    .canvas-pane:fullscreen,
+    .canvas-pane:-webkit-full-screen,
+    .canvas-pane.is-fullscreen {
+      position: fixed !important;
+      inset: 0 !important;
+      top: 0 !important;
+      left: 0 !important;
+      width: 100vw !important;
+      height: 100vh !important;
+      max-width: 100vw !important;
+      max-height: 100vh !important;
+      z-index: 99999 !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      display: flex !important;
+      flex-direction: column !important;
+      background: #ffffff !important;
+    }
+
+    .toolbar-bar {
+      flex-shrink: 0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 6px 12px;
+      border-bottom: 1px solid #e2e8f0;
+      background: #ffffff;
+      z-index: 10;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    .action-group { display: flex; gap: 4px; align-items: center; flex-wrap: wrap; }
+    .act-btn {
+      background: #ffffff;
+      border: 1px solid #cbd5e1;
+      padding: 4px 8px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 11.5px;
+      font-weight: 500;
+      color: #334155;
+      transition: all 0.2s;
+    }
+    .act-btn:hover { background: #f1f5f9; border-color: #94a3b8; }
+    .act-btn.active-view { background: #0f172a; color: #fff; border-color: #0f172a; }
+    .act-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .act-btn.export-jpg { background: #fefce8; border-color: #fde047; color: #854d0e; font-weight: 600; }
+    .act-btn.export-jpg:hover { background: #fef9c3; }
+    .act-btn.export-ggb { background: #eff6ff; border-color: #bfdbfe; color: #1d4ed8; font-weight: 600; }
+    .act-btn.export-ggb:hover { background: #dbeafe; }
+    .act-btn.fullscreen-btn { background: #f8fafc; font-weight: 600; color: #1e293b; }
+    .act-btn.fullscreen-btn.is-active { background: #fee2e2; border-color: #fca5a5; color: #dc2626; }
+    
+    .ggb-wrapper-outer {
+      flex: 1;
+      min-height: 0;
+      position: relative;
+      width: 100%;
+      height: 100%;
+      background: #ffffff;
+      overflow: hidden;
+    }
+    #ggb-canvas-box {
+      position: absolute;
+      inset: 0;
+      width: 100% !important;
+      height: 100% !important;
+      overflow: hidden;
+    }
+
+    #ggb-canvas-box article,
+    #ggb-canvas-box .GeoGebraFrame,
+    #ggb-canvas-box .applet_scaler {
+      width: 100% !important;
+      height: 100% !important;
+      max-width: none !important;
+      max-height: none !important;
+      margin: 0 !important;
+      transform: none !important;
+    }
+
+    /* 生产级优雅悬浮 Toast 消息提示组件 */
+    .toast-container {
+      position: fixed;
+      top: 18px;
+      right: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      z-index: 1000000;
+      pointer-events: none;
+    }
+    .toast-item {
+      pointer-events: auto;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 14px;
+      border-radius: 6px;
+      font-size: 12.5px;
+      font-weight: 500;
+      box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08), 0 2px 4px rgba(15, 23, 42, 0.04);
+      backdrop-filter: blur(8px);
+      transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+      max-width: 380px;
+    }
+    .toast-item.info {
+      background: rgba(239, 246, 255, 0.96);
+      border: 1px solid #bfdbfe;
+      color: #1e40af;
+    }
+    .toast-item.success {
+      background: rgba(240, 253, 244, 0.96);
+      border: 1px solid #bbf7d0;
+      color: #166534;
+    }
+    .toast-item.warning {
+      background: rgba(254, 252, 232, 0.96);
+      border: 1px solid #fef08a;
+      color: #854d0e;
+    }
+    .toast-item.error {
+      background: rgba(254, 242, 242, 0.96);
+      border: 1px solid #fecaca;
+      color: #991b1b;
+    }
+    .toast-icon { font-size: 14px; flex-shrink: 0; }
+    .toast-text { line-height: 1.4; word-break: break-all; }
+
+    .toast-enter-from { opacity: 0; transform: translateY(-12px) scale(0.95); }
+    .toast-leave-to { opacity: 0; transform: translateX(30px) scale(0.95); }
+  </style>
+</head>
+<body>
+
+  <div id="app">
+    <!-- 顶部配置栏 -->
+    <header class="top-header">
+      <div class="logo-box">
+        <span>📐</span> AI + GeoGebra 作图工作台
+      </div>
+      
+      <div class="config-group">
+        <label>服务商：</label>
+        <select v-model="selectedProviderId" @change="onProviderChange">
+          <option v-for="p in providers" :key="p.id" :value="p.id">{{ p.name }}</option>
+        </select>
+      </div>
+
+      <div class="config-group">
+        <label>模型：</label>
+        <input 
+          type="text" 
+          v-model="currentModel" 
+          list="model-options" 
+          class="model-field"
+          placeholder="选择或输入模型" 
+          @input="saveConfig"
+        />
+        <datalist id="model-options">
+          <option v-for="m in currentProvider.models" :key="m" :value="m">{{ m }}</option>
+        </datalist>
+      </div>
+
+      <div class="config-group">
+        <label>思考深度：</label>
+        <select v-model="thinkingDepth" @change="saveConfig" class="depth-field" title="选择模型思考深度">
+          <option value="none">0思考 (极速直出)</option>
+          <option value="low">轻度思考 (Low)</option>
+          <option value="medium">中度思考 (Medium)</option>
+        </select>
+      </div>
+
+      <div class="config-group">
+        <label>API Key：</label>
+        <input 
+          type="password" 
+          v-model="apiKey" 
+          class="key-field" 
+          :placeholder="currentProvider.keyPlaceholder" 
+          @input="saveConfig"
+        />
+      </div>
+
+      <div class="header-actions">
+        <button class="btn-test" :disabled="isTesting" @click="testConnection">
+          {{ isTesting ? '检测中...' : '测试连接' }}
+        </button>
+        <span v-if="testMsg" :class="['status-tag', testSuccess ? 'pass' : 'fail']">{{ testMsg }}</span>
+      </div>
+    </header>
+
+    <!-- 主工作区 -->
+    <div class="main-workspace">
+      <!-- 左侧控制区 -->
+      <div class="control-pane">
+        <div class="mode-bar">
+          <div class="mode-toggle-group">
+            <button 
+              type="button"
+              :class="['mode-btn', currentMode === 'classic' ? 'active' : '']" 
+              @click="setMode('classic')"
+            >
+              🌟 经典模式
+            </button>
+            <button 
+              type="button"
+              :class="['mode-btn', currentMode === 'free' ? 'active' : '']" 
+              @click="setMode('free')"
+            >
+              ⚡ 自由模式
+            </button>
+          </div>
+
+          <div class="context-ctrl">
+            <span class="context-badge">轮数: {{ conversationTurns }}</span>
+            <button class="btn-clear-ctx" @click="resetContextAndCanvas" title="清空上下文与画布">
+              🧹 清空
+            </button>
+          </div>
+        </div>
+
+        <!-- 典型案例库 -->
+        <div class="preset-container">
+          <div class="preset-title">
+            <span>📚 典型探究案例库：</span>
+          </div>
+          <select class="preset-select" v-model="selectedPresetIndex" @change="applySelectedPreset">
+            <option value="" disabled selected>-- 点击选择典型例题（秒级直出） --</option>
+            <optgroup label="【一、圆锥曲线与解析几何】">
+              <option :value="0">01. 椭圆焦点三角形与焦半径伴生体系 (2D)</option>
+              <option :value="1">02. 阿波罗尼斯圆轨迹与双曲线伴生背景 (2D)</option>
+              <option :value="2">03. 抛物线焦点弦性质与准线伴生切圆 (2D)</option>
+              <option :value="3">04. 椭圆中点弦与点差法动态斜率定值 (2D)</option>
+              <option :value="4">05. 双曲线光学反射特性与焦点追迹光线 (2D)</option>
+            </optgroup>
+            <optgroup label="【二、函数导数与三角动态】">
+              <option :value="5">06. 单位圆正弦线向右匀速展开为正弦波 (2D动态)</option>
+              <option :value="6">07. 割线向动切线逼近与导数几何意义 (2D微积分)</option>
+              <option :value="7">08. 三次函数极值点、拐点中心对称动态演化 (2D导数)</option>
+              <option :value="8">09. 两角和正弦公式几何构造与面积法动态演示 (2D三角)</option>
+            </optgroup>
+            <optgroup label="【三、跨学科融合物理模型】">
+              <option :value="9">10. 弹簧振子简谐运动与圆周投影相图 (物理)</option>
+              <option :value="10">11. 开普勒第二定律行星椭圆扫过面积恒定 (天体动力学)</option>
+            </optgroup>
+            <optgroup label="【四、空间立体几何与高维拓扑】">
+              <option :value="11">12. 正三棱柱动截面、垂线与透视 (3D立体)</option>
+              <option :value="12">13. 正方体内切球、棱切球与外接球三球嵌套 (3D度量)</option>
+              <option :value="13">14. 空间异面直线公垂线与最短动线段逼近 (3D空间向量)</option>
+              <option :value="14">15. 空间单叶双曲面直纹面动态旋转生成 (3D高阶动态)</option>
+            </optgroup>
+          </select>
+        </div>
+
+        <!-- 需求输入与多模态面板 -->
+        <div class="prompt-box">
+          <textarea 
+            v-model="promptInput" 
+            :placeholder="conversationTurns > 0 ? '💬 继续输入指令（例如：“连接AD中点E”、“作垂线段”...）' : '输入数学作图需求，或上传题目图片/使用语音识别...'" 
+            rows="3"
+          ></textarea>
+
+          <div class="multimodal-bar">
+            <button 
+              type="button" 
+              :class="['tool-btn', isRecording ? 'recording' : '']" 
+              @click="toggleVoiceInput"
+            >
+              <span>{{ isRecording ? '⏹ 停止录音' : '🎙️ 语音' }}</span>
+            </button>
+
+            <button type="button" class="tool-btn" @click="triggerFileInput">
+              <span>📷 上传图片</span>
+            </button>
+            <input 
+              type="file" 
+              ref="fileInputRef" 
+              style="display: none;" 
+              accept="image/*" 
+              @change="handleImageSelected"
+            />
+
+            <div v-if="uploadedImageBase64" class="image-preview-badge">
+              <span>🖼️ 已附图</span>
+              <span class="img-del-btn" @click="removeImage" title="移除图片">×</span>
+            </div>
+          </div>
+
+          <div class="btn-compile-row">
+            <button 
+              :class="['btn-compile', conversationTurns > 0 ? 'incremental' : '']" 
+              :disabled="isLoading || isRepairing" 
+              @click="handleGenerate"
+            >
+              <span v-if="isLoading || isRepairing" class="spinner"></span>
+              <span>
+                {{ isLoading ? 'AI 正在生成指令...' : (isRepairing ? '正在自动闭环纠错...' : (conversationTurns > 0 ? '➕ 增量作图' : '🚀 生成并渲染图形')) }}
+              </span>
+            </button>
+          </div>
+        </div>
+
+        <!-- 思考进程监控面板 -->
+        <div class="monitor-card">
+          <div class="monitor-header">
+            <div class="monitor-title">
+              <span :class="['pulse-indicator', isRepairing ? 'warning' : (isLoading ? 'active' : '')]"></span>
+              <span>思考进程与资源监控</span>
+            </div>
+            <span :class="['stage-badge', isRepairing ? 'fixing' : (isLoading ? 'running' : (progressPercent === 100 ? 'done' : ''))]">
+              {{ processPhase }}
+            </span>
+          </div>
+
+          <div class="monitor-grid">
+            <div class="grid-col">
+              <span class="col-label">当前环节</span>
+              <span class="col-val" :title="processPhaseDetail">{{ processPhaseDetail }}</span>
+            </div>
+            <div class="grid-col">
+              <span class="col-label">消耗时间</span>
+              <span class="col-val mono">{{ elapsedTime.toFixed(1) }}s</span>
+            </div>
+            <div class="grid-col">
+              <span class="col-label">Token 消耗</span>
+              <span class="col-val mono">{{ estimatedTokens }}</span>
+            </div>
+          </div>
+
+          <div class="progress-track">
+            <div :class="['progress-fill', isRepairing ? 'fixing' : (progressPercent === 100 ? 'done' : '')]" :style="{ width: progressPercent + '%' }"></div>
+          </div>
+        </div>
+
+        <!-- GGB 指令管理面板 (支持自动纠错 + 手动修改) -->
+        <div class="card-block">
+          <h4>
+            <span>指令管理 (共 {{ commandsList.length }} 条)</span>
+            <div class="command-header-actions">
+              <button class="cmd-btn-small" @click="selectOnlyFailed" title="勾选执行失败的指令">
+                失败项 ({{ failedCount }})
+              </button>
+              <button class="cmd-btn-small" @click="toggleSelectAll">
+                {{ isAllSelected ? '取消全选' : '全选' }}
+              </button>
+              <button class="cmd-btn-small primary" @click="batchExecuteAll(false)">
+                ▶ 执行全部
+              </button>
+              <button class="cmd-btn-small" @click="batchExecuteAll(true)">
+                ↺ 重建
+              </button>
+            </div>
+          </h4>
+
+          <ul class="command-list-container">
+            <li v-if="commandsList.length === 0" style="padding: 10px; text-align: center; color: #94a3b8; font-size: 11.5px;">
+              暂无指令，输入后点击上方按钮秒级渲染。
+            </li>
+            <li 
+              v-for="(item, idx) in commandsList" 
+              :key="item.id" 
+              :class="['command-item', item.selected ? 'is-selected' : '']"
+            >
+              <input type="checkbox" v-model="item.selected" class="cmd-checkbox" title="勾选以手动发送给AI修复" />
+              <span :class="['cmd-status-icon', item.pass ? 'pass' : 'fail']" :title="item.pass ? '执行正常' : '语法或引用异常'">
+                {{ item.pass ? '✓' : '✗' }}
+              </span>
+              <input 
+                type="text" 
+                v-model="item.text" 
+                class="cmd-input-field" 
+                @keyup.enter="executeSingleCommand(item)"
+                placeholder="GeoGebra 指令"
+              />
+              <div class="cmd-actions">
+                <button class="cmd-action-icon fix" title="极速纠错单条指令" @click="quickFixSingle(item)">⚡</button>
+                <button class="cmd-action-icon" title="执行" @click="executeSingleCommand(item)">▶</button>
+                <button class="cmd-action-icon del" title="删除" @click="removeCommand(idx)">🗑</button>
+              </div>
+            </li>
+          </ul>
+
+          <!-- 手动修改与定向修复操作栏 -->
+          <div v-if="selectedCount > 0" class="quick-repair-bar">
+            <div class="quick-repair-top">
+              <span>🛠️ 已勾选 {{ selectedCount }} 条待修改指令</span>
+              <span style="font-size: 10.5px; font-weight: normal; color: #e11d48;">手动就地极速纠错</span>
+            </div>
+            <div class="quick-repair-inputs">
+              <input 
+                type="text" 
+                v-model="repairUserNote" 
+                placeholder="可选输入补充说明（如：把焦点换成F2、改为实线等）" 
+                class="repair-hint-input"
+                @keyup.enter="handleManualTargetedRepair"
+              />
+              <button 
+                class="btn-do-repair" 
+                :disabled="isRepairing || isLoading" 
+                @click="handleManualTargetedRepair"
+              >
+                <span v-if="isRepairing" class="spinner" style="border-top-color:#fff; width:10px; height:10px;"></span>
+                <span>{{ isRepairing ? '纠错中...' : '⚡ 极速修改' }}</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="add-command-bar">
+            <input 
+              type="text" 
+              v-model="newCommandText" 
+              placeholder="新增指令，如：P = Midpoint(A, B)" 
+              class="add-command-input"
+              @keyup.enter="addNewCommand"
+            />
+            <button class="btn-add-cmd" @click="addNewCommand">➕ 新增</button>
+          </div>
+        </div>
+
+        <!-- 历史记录 -->
+        <div v-if="historyList.length > 0" class="card-block">
+          <h4>历史生成：</h4>
+          <div class="history-list">
+            <div 
+              v-for="(h, idx) in historyList" 
+              :key="idx" 
+              class="history-item"
+              @click="restoreHistory(h)"
+            >
+              <span>{{ h.title }}</span>
+              <span style="color:#94a3b8;">{{ h.time }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 右侧 GGB 画布视图 -->
+      <div :class="['canvas-pane', isFullscreen ? 'is-fullscreen' : '']">
+        <div class="toolbar-bar">
+          <div class="action-group">
+            <button :class="['act-btn', currentPerspective === '2d' ? 'active-view' : '']" @click="setPerspectiveManually('2d')">2D 平面</button>
+            <button :class="['act-btn', currentPerspective === '3d' ? 'active-view' : '']" @click="setPerspectiveManually('3d')">3D 空间</button>
+            <button class="act-btn" @click="zoomInGraph" title="放大图像比例">🔍+ 放大</button>
+            <button class="act-btn" @click="zoomOutGraph" title="缩小图像比例">🔍- 缩小</button>
+            <button class="act-btn" @click="resetView" title="重置居中视角">⟲ 居中</button>
+            <button class="act-btn" :disabled="!hasAnimation" @click="toggleAnim(true)">▶ 播放</button>
+            <button class="act-btn" :disabled="!hasAnimation" @click="toggleAnim(false)">⏸ 暂停</button>
+            <button class="act-btn" @click="hardResetGGB">↺ 清空</button>
+          </div>
+
+          <div class="action-group">
+            <button 
+              :class="['act-btn', 'fullscreen-btn', isFullscreen ? 'is-active' : '']" 
+              @click="toggleFullscreen" 
+              :title="isFullscreen ? '退出全屏 (Esc)' : '全屏放大查看图形'"
+            >
+              {{ isFullscreen ? '⤓ 退出全屏' : '⛶ 全屏放大' }}
+            </button>
+            <button class="act-btn export-jpg" @click="exportJPG" title="导出高清晰 JPG 图片">🖼️ 导出 JPG</button>
+            <button class="act-btn export-ggb" @click="exportGGB">下载 .ggb</button>
+          </div>
+        </div>
+
+        <div class="ggb-wrapper-outer">
+          <div id="ggb-canvas-box"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 优雅悬浮消息提示容器 (替代浏览器原生 alert 弹窗) -->
+    <div class="toast-container">
+      <transition-group name="toast">
+        <div v-for="t in toasts" :key="t.id" :class="['toast-item', t.type]">
+          <span class="toast-icon">
+            {{ t.type === 'success' ? '✓' : (t.type === 'error' ? '✕' : (t.type === 'warning' ? '⚠' : 'ℹ')) }}
+          </span>
+          <span class="toast-text">{{ t.text }}</span>
+        </div>
+      </transition-group>
+    </div>
+  </div>
+
+  <script>
+    // =========================================================================
+    // 【生产安全防护与防审查机制】
+    // 1. 禁用鼠标右键菜单
+    // 2. 拦截 F12、Ctrl/Cmd+U、Ctrl/Cmd+S、Ctrl/Cmd+Shift+I/J/C 等审查快捷键
+    // 3. 控制台静默 (移除 log/info/debug/warn 打印)
+    // 4. 定时反调试阻断机制
+    // =========================================================================
+    (() => {
+      // 禁用鼠标右键菜单
+      document.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        return false;
+      }, { capture: true });
+
+      // 禁用审查与查看源码常用快捷键
+      window.addEventListener('keydown', (e) => {
+        const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+        const ctrlOrMeta = isMac ? e.metaKey : e.ctrlKey;
+        const key = e.key.toLowerCase();
+
+        // 拦截 F12
+        if (e.keyCode === 123 || key === 'f12') {
+          e.preventDefault();
+          e.stopPropagation();
+          return false;
+        }
+
+        // 拦截 Ctrl+U / Cmd+Option+U (查看源文件)
+        if ((ctrlOrMeta && key === 'u') || (e.metaKey && e.altKey && key === 'u')) {
+          e.preventDefault();
+          e.stopPropagation();
+          return false;
+        }
+
+        // 拦截 Ctrl+S / Cmd+S (保存网页)
+        if (ctrlOrMeta && key === 's') {
+          e.preventDefault();
+          e.stopPropagation();
+          return false;
+        }
+
+        // 拦截 Ctrl+Shift+I / J / C 以及 Mac 下 Cmd+Option+I / J / C
+        if (
+          (ctrlOrMeta && e.shiftKey && ['i', 'j', 'c'].includes(key)) ||
+          (e.metaKey && e.altKey && ['i', 'j', 'c'].includes(key))
+        ) {
+          e.preventDefault();
+          e.stopPropagation();
+          return false;
+        }
+      }, { capture: true });
+
+      // 生产环境控制台静音
+      try {
+        const noop = () => {};
+        window.console.log = noop;
+        window.console.info = noop;
+        window.console.debug = noop;
+        window.console.warn = noop;
+      } catch (err) {}
+
+      // 轻量反调试阻断
+      setInterval(() => {
+        try {
+          (function() {
+            return false;
+          }['constructor']('debugger')());
+        } catch (e) {}
+      }, 1200);
+    })();
+
+    const { createApp, ref, computed, onMounted, nextTick } = Vue;
+
+    // =========================================================================
+    // 【经典模式】System Prompt —— 严格 100% 原样还原初始完整版本
+    // =========================================================================
+    const SYSTEM_PROMPT_CLASSIC = `# Role
+你是一名精通中国高中数学（人教A版课程标准）与 GeoGebra (GGB) 脚本编译的高级教研专家。你的任务是将用户的作图需求（包括文字或视觉题图），先进行详尽的数学推导与参数建模，再严格依照规范编译为前端可直接 100% 成功执行的结构化 JSON。
+
+---
+
+# 一、指令约束铁律
+1. 【单向拓扑顺序】：点(Point) -> 线(Segment/Line) -> 多边形/几何体(Segment) -> 轨迹/变换(Locus)。
+2. 【禁用保留字】：严禁使用 x, y, z, xAxis, yAxis, e, i, pi, beta, alpha 作为图元变量名。
+3. 【隐式方程冒号声明】：例如 conic: x^2/4 + y^2 = 1 或 unitCir: x^2 + y^2 = 1。严禁用等号声明曲线。严禁：cBot: x^2 + y^2 = 1, z = -2。
+4. 【GGB 内置几何指令首字母必须大写】：所有 GGB 几何作图、度量、变换指令必须大驼峰命名（首字母大写）。 正确：Point, Midpoint等, - 错误：point, midpoint等。
+5. 【基础数学函数必须严格全小写】：所有数学函数必须全小写。正确： sqrt, exp, sin, cos, tan, abs, ln, log, cosh, sinh 等，错误： Sqrt, Exp, Sin 等
+6. 【图元变量命名约定】：
+   - 点对象变量名首字母强制大写：A = (1, 2), P = (cos(t), sin(t)), MidD = Midpoint(A, B)
+   - 曲线、直线、参数滑动条首字母小写：t = Slider(...), k = Slider(...), lineL = Line(A, B), conic: x^2/4 + y^2 = 1
+   - 严禁使用 x, y, z, xAxis, yAxis, e, i, pi, beta, alpha 作为图元变量名
+7. 【动态效果】：涉及动态、轨迹、演示、运动等问题时，必须展示“动”的过程。
+8. 【严禁自然语言夹杂】：commands 中每一项必须是纯纯净净的单行 GGB 赋值或调用语句，严禁包含任何中文说明、编号前缀、Markdown 字符！
+9. 【立体几何线框与填充规范】：在立体几何中，非必要不需要填充/延伸时，直接使用 Segment，严禁滥用 Polygon 或 Plane。多面体骨架与棱边强制使用 Segment 逐条连接构建纯线框透视模型（避免遮挡内部辅助线与变量污染）；仅当题目明确涉及“动截面”、“着色投影面”或“二面角特定基底”时，方可针对该特定面使用 Polygon，且必须设置半透明样式。
+10.【严禁自创GGB无效运算】：如（.x / .y）提取坐标
+
+---
+
+# 二、GeoGebra 基础指令白名单（严禁臆造或使用列表外的指令）
+commands 中必须严格从以下白名单中选用基础指令：
+1. 点定义与特征点：直角坐标 A = (x, y) 或 A = (x, y, z)；动点 Point(<对象>), Point(<对象>, <参数t>)；中点 Midpoint(<点A>, <点B>)；交点 Intersect(<对象1>, <对象2>, <交点序号>) (必带序号)。
+2. 线、射线与多边形：Segment(<点A>, <点B>)；Line(<点A>, <点B>)；Ray(<起点A>, <方向点B>)；PerpendicularLine(<点>, <线/面>)；ParallelLine(<点>, <线/面>)；LineBisector(<点A>, <点B>)；AngleBisector(<点A>, <顶点B>, <点C>);Polygon(<点A>, <点B>, <点C>, ...)。
+3. 圆锥曲线：Circle(<圆心>, <半径数值>)；Ellipse(<焦点1>, <焦点2>, <长半轴长>)；Hyperbola(<焦点1>, <焦点2>, <实半轴长>)；Parabola(<焦点>, <准线>)；Tangent(<点>, <圆锥曲线/函数>)。
+4. 函数与轨迹：Function(<表达式>, <起始x>, <终止x>)；Locus(<动点>, <滑动条>)；Curve(<x(t)>, <y(t)>, t, <起始值>, <终止值>);Slope(<Line>)。
+5. 向量与变换：Vector(<起点>, <终点>)；Angle(<点A>, <顶点B>, <点C>)；Rotate(<对象>, <角度>, <中心>)；Translate(<对象>, <向量>)；Reflect(<对象>, <对称轴/点>)。
+6. 3D 几何：Plane(<点A>, <点B>, <点C>)；Plane(<点>, <垂线/平行面>)；相交路径IntersectPath(<平面1>, <平面2>)；Sphere(<球心>, <半径>)；Prism(<底面多边形>, <顶面点/高度>)；Pyramid(<底面多边形>, <顶点>)；Surface( <x表达式>, <y表达式>, <z表达式>, <参数变量1>, <起始值>, <结束值>, <参数变量2>, <起始值>, <结束值> )。
+7. 控制器：Slider(<最小值>, <最大值>, <步长>)。一维轨迹曲线Locus(<生成轨迹的动点>, <滑块或路径点>)
+8：其他：文本Text,平面两点距离Length,空间两点距离Distance
+
+---
+
+# 三、数学推导与思考过程要求（必须在 reasoning 中详尽展现）
+1. 【几何拓扑与题意解析】：明确几何构型的主体、动点自由度、辅助线/截面法向量、约束条件。
+2. 【解析几何坐标与代数推导】：严谨写出坐标系建立方式、关键顶点坐标计算步骤、圆锥曲线/空间平面方程推导、交点解方程组过程。
+3. 【GGB装配与样式方案】：规划点、线、面、滑动条变量名的拓扑依赖链条,搭配合理的标签、展现优化点、虚实线、面等图形视觉显示效果。
+4.  【伴生图形】：必要的伴生图形绘制
+
+---
+
+# 输出格式（必须输出且仅输出单个合法纯 JSON 块）：
+{
+  "reasoning": "【一、几何拓扑解析】...\\n【二、解析坐标与方程推导】...\\n【三、GGB指令装配方案】...\\n【四、伴生图形】",
+  "viewConfig": { "dimension": "2d", "showAxes": true, "showGrid": true },
+  "commands": [
+    "t = Slider(0.05, 2 * pi, 0.02)",
+    "O = (0, 0)",
+    "unitCir: x^2 + y^2 = 1",
+    "P = (cos(t), sin(t))",
+    "ProjX = (cos(t), 0)",
+    "Q = (t, sin(t))",
+    "OP = Segment(O, P)",
+    "PQ = Segment(P, Q)",
+    "PProjX = Segment(P, ProjX)",
+    "sinCurve = Locus(Q, t)"
+  ],
+  "styles": [
+    { "target": "unitCir", "color": [100, 116, 139], "thickness": 2, "showLabel": false },
+    { "target": "OP", "color": [15, 23, 42], "thickness": 3, "showLabel": false },
+    { "target": "P", "caption": "$P$", "labelMode": 3, "showLabel": true }
+  ],
+  "animationConfig": { "target": "t", "speed": 1.2, "autoStart": true }
+}`;
+
+    // =========================================================================
+    // 【自由模式】System Prompt —— 100% 原样还原初始完整版本
+    // =========================================================================
+    const SYSTEM_PROMPT_FREE = `# Role
+你是一个纯粹且极速的 GeoGebra (GGB) 指令生成器。
+【铁律】：严禁输出任何分析过程、解题说明、Markdown 阐述或自然语言！直接秒级回应输出可执行的 GGB 指令 JSON 块。
+
+# GGB 语法规范
+1. 【隐式曲线冒号声明】：如 conic: x^2/4 + y^2 = 1 或 unitCir: x^2 + y^2 = 1，严禁用等号声明曲线。错误示范：cBot: x^2 + y^2 = 1, z = -2，。
+2. 【命名约束】：点对象首字母强制大写（A = (1, 2), P = (cos(t), sin(t))）；曲线/线/滑动条首字母小写（t = Slider(...), lineL = Line(A, B)）；严禁使用 x, y, z, xAxis, yAxis, e, i, pi 作为变量名。
+3. 【指令大小写】：几何作图指令首字母必须大写（Point, Midpoint, Line, Segment, Circle, Ellipse, Hyperbola, Parabola, Polygon, Intersect, Slider 等）；基础数学函数严格全小写（sqrt, exp, sin, cos, tan, abs, ln 等）。
+4. 【严禁自创GGB无效运算】：如（.x / .y）提取坐标。
+5. 【纯净指令】：commands 数组中每一项必须是纯粹单行 GGB 赋值或调用语句，严禁自然语言注释。
+
+# 输出格式（必须且仅输出单个合法纯 JSON 块）：
+{
+  "viewConfig": { "dimension": "2d", "showAxes": true, "showGrid": true },
+  "commands": [
+    "t = Slider(0.05, 2 * pi, 0.02)",
+    "O = (0, 0)",
+    "unitCir: x^2 + y^2 = 1",
+    "P = (cos(t), sin(t))",
+    "OP = Segment(O, P)"
+  ],
+  "styles": [
+    { "target": "OP", "color": [37, 99, 235], "thickness": 3 }
+  ],
+  "animationConfig": { "target": "t", "speed": 1.0, "autoStart": true }
+}`;
+
+    // 【极速定向指令修复引擎】专用 Prompt (用于自动纠错及手动快速修复)
+    const SYSTEM_PROMPT_TARGETED_FIX = `你是 GeoGebra (GGB) 指令极速语法纠错引擎。
+【铁律】：
+1. 严禁输出任何思考过程、分析推导、解释说明、Markdown 标题或 HTML 代码！
+2. 严禁重构全局图形或输出其他多余指令，仅针对待修复指令进行逐条就地修正。
+3. 严格遵守 GeoGebra 语法规则：
+   - 隐式曲线方程必须用冒号声明（如 hyp: x^2/4 - y^2/5 = 1，严禁用等号声明曲线）
+   - 点名首字母必须大写（如 A, B, P, MidD）
+   - 交点必须带序号 Intersect(obj1, obj2, 1)
+4. 输出格式：必须且仅输出一个纯 JSON 字符串数组，数组中指令与用户传入的待修复项一一对应。
+例如：["hyp: x^2/4 - y^2/5 = 1", "P = Intersect(hyp, lineL, 1)"]`;
+
+    const PROVIDERS = [
+      { id: 'deepseek', name: 'DeepSeek (官方)', baseUrl: 'https://api.deepseek.com/v1/chat/completions', models: ['deepseek-chat', 'deepseek-reasoner'], defaultModel: 'deepseek-chat', keyPlaceholder: 'sk-...' },
+      { id: 'siliconflow', name: 'SiliconFlow (硅基流动)', baseUrl: 'https://api.siliconflow.cn/v1/chat/completions', models: ['deepseek-ai/DeepSeek-V3', 'deepseek-ai/DeepSeek-R1', 'Qwen/Qwen2.5-72B-Instruct', 'Qwen/Qwen2-VL-72B-Instruct'], defaultModel: 'deepseek-ai/DeepSeek-V3', keyPlaceholder: 'sk-...' },
+      { id: 'dashscope', name: '阿里云百炼 (通义千问)', baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions', models: ['qwen-max', 'qwen-plus', 'qwen-vl-max'], defaultModel: 'qwen-max', keyPlaceholder: 'sk-...' },
+      { id: 'openai', name: 'OpenAI (海外/中转)', baseUrl: 'https://api.openai.com/v1/chat/completions', models: ['gpt-4o', 'gpt-4o-mini'], defaultModel: 'gpt-4o-mini', keyPlaceholder: 'sk-...' },
+      { id: 'ollama', name: 'Ollama (本地部署)', baseUrl: 'http://localhost:11434/v1/chat/completions', models: ['qwen2.5:7b', 'deepseek-r1:8b', 'llava:7b'], defaultModel: 'qwen2.5:7b', keyPlaceholder: '本地无需 Key' }
+    ];
+
+    const PRESETS = [
+      { 
+        title: '01. 椭圆焦点三角形与焦半径伴生体系 (2D解析)',
+        prompt: '画椭圆 x^2/4 + y^2 = 1，定义左、右焦点 F1(-sqrt(3), 0) 和 F2(sqrt(3), 0)。创建离角滑动条 t (0 到 2*pi)，在椭圆上取动点 P(2*cos(t), sin(t))。连接焦半径 PF1 与 PF2 构成焦点三角形 PF1F2，画出过点 P 的椭圆切线 lineT，并作出点 P 到左准线 directrix: x = -4/sqrt(3) 的垂线段 PD。'
+      },
+      { 
+        title: '02. 阿波罗尼斯圆轨迹与双曲线伴生背景 (2D综合)',
+        prompt: '平面上固定两点 A(-2, 0) 与 B(2, 0)。创建比例参数滑动条 k (1.2 到 3.0，初值 2.0)。绘制满足 PA/PB = k 生成的阿波罗尼斯圆轨迹方程 (x - 2*(k^2+1)/(k^2-1))^2 + y^2 = (4*k/(k^2-1))^2，并在同一坐标系中画出以 A、B 为焦点的伴生双曲线背景 x^2/1 - y^2/3 = 1 及其渐近线，连接焦半径 PA 与 PB。'
+      },
+      { 
+        title: '03. 抛物线焦点弦性质与准线伴生切圆 (2D解析)',
+        prompt: '画抛物线 par: y^2 = 4*x，焦点 F(1, 0)，准线 dir: x = -1。创建斜率滑动条 k (-2 到 2，步长 0.1)。画过焦点 F 且斜率为 k 的动直线 lineL: y = k*(x-1)，与抛物线交于 A、B 两点。取焦点弦 AB 的中点 M，画出以 AB 为直径的伴生圆 circleAB: (x-x(M))^2 + (y-y(M))^2 = (Distance(A,B)/2)^2，展示该圆恒与准线 dir 相切。'
+      },
+      { 
+        title: '04. 椭圆中点弦与点差法动态斜率定值 (2D解析)',
+        prompt: '画椭圆 x^2/4 + y^2/2 = 1。在椭圆内部固定点 M(1, 0.5)。创建割线斜率滑动条 k (-1.5 到 1.5)。作过 M 且斜率为 k 的动直线 lineL: y - 0.5 = k*(x - 1)，与椭圆相交于 P1、P2 两点。构造弦 P1P2 的中点 N = Midpoint(P1, P2)，作出原点 O 到中点 N 的连线段 ON，展示点差法定值关系 k * k_ON = -0.5。'
+      },
+      { 
+        title: '05. 双曲线光学反射特性与焦点追迹光线 (2D光学)',
+        prompt: '画双曲线 hyp: x^2/4 - y^2/5 = 1，左焦点 F1(-3, 0)，右焦点 F2(3, 0)。创建参数滑动条 t (-1.5 到 1.5)，在双曲线右支上定义动点 P(2*cosh(t), sqrt(5)*sinh(t))。画从左焦点 F1 发出的入射光线段 F1P，过点 P 作双曲线切线 lineT，并作出沿切线反射的光线 Ray(P, P + (P - F2))，反向延长线过右焦点 F2。'
+      },
+      { 
+        title: '06. 单位圆正弦线向右匀速展开为正弦波 (2D三角动态)',
+        prompt: '创建滑动条 t (0.05 到 2*pi，步长 0.02)。画出原点单位圆 unitCir: x^2 + y^2 = 1，圆上动点 P(cos(t), sin(t))，沿 X 轴方向水平展开的动点 Q(t, sin(t))，点 P 到 X 轴的垂线段及水平连接导轨线段 PQ，生成点 Q 随 t 运动的正弦曲线轨迹 sinCurve = Locus(Q, t)。'
+      },
+      { 
+        title: '07. 割线向动切线逼近与导数几何意义 (2D微积分)',
+        prompt: '定义三次函数 f(x) = x^3/3 - x。在曲线上取固定切点 A(1, -2/3)，创建表示增量 Delta x 的滑动条 h (从 2 递减变化到 0.02)。取曲线上割线动点 B(1+h, f(1+h))，绘制过 A、B 的动割线 secLine: Line(A, B)，同时画出点 A 处的真实切线 tanLine: Line(A, Point(A + (1, 0)))，直观展示割线斜率逼近切线的过程。'
+      },
+      { 
+        title: '08. 三次函数极值点、拐点中心对称动态演化 (2D导数)',
+        prompt: '创建常数参数滑动条 a (-2 到 2)。定义三次函数 f(x) = x^3 - 3*x + a。求解并标出其极大值点 A(-1, f(-1))、极小值点 B(1, f(1)) 以及对称中心拐点 C(0, a)。绘制过拐点 C 的三次曲线割线并连接线段 AB，展示两极值点关于拐点 C 严格中心对称。'
+      },
+      { 
+        title: '09. 两角和正弦公式几何构造与面积法动态演示 (2D三角)',
+        prompt: '创建两个角度滑动条 alpha (15° 到 60°) 和 beta (15° 到 60°)。以原点 O 为顶点，构造斜边长为 2 的两个相邻直角三角形：点 A(2*cos(alpha), 2*sin(alpha))，以 OA 为公共边向上构造角 beta 的点 B。作出对应的垂线段，动态展示 sin(alpha + beta) = sin(alpha)*cos(beta) + cos(alpha)*sin(beta) 几何推导。'
+      },
+      { 
+        title: '10. 跨学科·弹簧振子简谐运动与圆周投影相图 (物理)',
+        prompt: '创建时间滑动条 t (0 到 4*pi)。画参考圆 x^2 + y^2 = 4，匀速圆周运动质点 P(2*cos(t), 2*sin(t))。质点在 X 轴上的投影点 M(2*cos(t), 0) 代表简谐振动位移。画垂直投影虚线段 PM，并在右侧绘制波形图动点 S(t, 2*cos(t)) 生成的余弦位移-时间波形曲线 wave = Locus(S, t)。'
+      },
+      { 
+        title: '11. 跨学科·开普勒第二定律行星椭圆扫过面积恒定 (天体动力学)',
+        prompt: '画行星公转轨道椭圆 orb: x^2/9 + y^2/5 = 1，太阳位于左焦点 S(-2, 0)。创建离角参数滑动条 t (0 到 2*pi)，行星位置点 P(3*cos(t), sqrt(5)*sin(t))。取相邻离角点 P2(3*cos(t+0.3), sqrt(5)*sin(t+0.3))，构造扇形近似多边形 Polygon(S, P, P2) 并设置半透明高亮填充，展示相同时间微元内扫过的面积守恒。'
+      },
+      { 
+        title: '12. 正三棱柱动截面、垂线与不可见虚棱透视 (3D立体)',
+        prompt: '在 3D 空间视图中构建底面边长为 2、高为 3 的正三棱柱 ABC-A1B1C1。底面顶点 A(0, 0, 0), B(2, 0, 0), C(1, sqrt(3), 0)，顶面对应点 A1, B1, C1。创建棱 AA1 上的动点参数滑动条 m (0 到 3)，动点 P(0, 0, m)。作截面多边形 Polygon(P, B1, C)，底面不可见的棱 BC 及遮挡线采用深色虚线呈现。'
+      },
+      { 
+        title: '13. 正方体内切球、棱切球与外接球三球嵌套 (3D度量)',
+        prompt: '在 3D 空间建立对称中心在原点、边长为 2 的正方体（顶点坐标 (±1, ±1, ±1)）。画出其半径为 1 的内切球 Sphere((0,0,0), 1)、半径为 sqrt(2) 的棱切球 Sphere((0,0,0), sqrt(2)) 以及半径为 sqrt(3) 的外接球 Sphere((0,0,0), sqrt(3))，三球分别赋予不同透明度，展示几何度量嵌套关系。'
+      },
+      { 
+        title: '14. 空间异面直线公垂线与最短动线段逼近 (3D空间向量)',
+        prompt: '在 3D 空间中定义两条异面直线：直线 l1 经过点 A(0, 0, 0) 沿向量 (1, 0, 0)，直线 l2 经过点 B(0, 2, 2) 沿向量 (0, 1, 0)。在 l1 上取动点 P(u, 0, 0)，在 l2 上取动点 Q(0, 2+v, 2)（u, v 为滑动条）。画出连接线段 Segment(P, Q)，展示当 u=0, v=-2 时 PQ 成为公垂线段并取得最短距离。'
+      },
+      { 
+        title: '15. 空间单叶双曲面直纹面动态旋转生成 (3D高阶动态)',
+        prompt: '在 3D 空间中建立 Z 轴为旋转轴。创建时间滑动条 t (0 到 2*pi)。在平行平面 z = -2 和 z = 2 上分别定义圆周动点 A(cos(t), sin(t), -2) 和 B(cos(t+1.3), sin(t+1.3), 2)。画出连接线段 Segment(A, B)，随着 t 旋转展示直纹母线扫掠生成单叶双曲面的几何过程。'
+      }
+    ];
+
+    let cmdIdCounter = 1;
+    let toastIdCounter = 1;
+
+    createApp({
+      setup() {
+        const providers = ref(PROVIDERS);
+        const selectedProviderId = ref('deepseek');
+        const currentModel = ref('deepseek-chat');
+        // 思考深度：0思考(none)、轻度思考(low)、中度思考(medium)
+        const thinkingDepth = ref('none');
+        const currentMode = ref('classic');
+        const apiKey = ref('');
+        const isTesting = ref(false);
+        const testSuccess = ref(false);
+        const testMsg = ref('');
+
+        const toasts = ref([]);
+
+        const chatMessages = ref([]);
+        const conversationTurns = computed(() => chatMessages.value.filter(m => m.role === 'user').length);
+
+        const presets = ref(PRESETS);
+        const selectedPresetIndex = ref('');
+        const promptInput = ref('');
+        const isLoading = ref(false);
+        const isRepairing = ref(false);
+        const repairUserNote = ref('');
+
+        // 思考进程监控
+        const processPhase = ref('待命中');
+        const processPhaseDetail = ref('等待用户输入作图要求');
+        const elapsedTime = ref(0.0);
+        const estimatedTokens = ref(0);
+        const progressPercent = ref(0);
+        let timerInterval = null;
+
+        const commandsList = ref([]);
+        const newCommandText = ref('');
+        const hasAnimation = ref(false);
+        const historyList = ref([]);
+        const currentPerspective = ref('2d');
+        const isFullscreen = ref(false);
+
+        const uploadedImageBase64 = ref('');
+        const fileInputRef = ref(null);
+        const isRecording = ref(false);
+        let speechRecognition = null;
+        let ggbApp = null;
+        let normalWidthBeforeFullscreen = 0;
+        let resizeObserver = null;
+
+        const currentProvider = computed(() => providers.value.find(p => p.id === selectedProviderId.value) || providers.value[0]);
+        const failedCount = computed(() => commandsList.value.filter(c => !c.pass).length);
+        const selectedCount = computed(() => commandsList.value.filter(c => c.selected).length);
+        const isAllSelected = computed(() => commandsList.value.length > 0 && selectedCount.value === commandsList.value.length);
+
+        const showToast = (text, type = 'info', duration = 3000) => {
+          const id = toastIdCounter++;
+          toasts.value.push({ id, text, type });
+          setTimeout(() => {
+            toasts.value = toasts.value.filter(t => t.id !== id);
+          }, duration);
+        };
+
+        const setMode = (mode) => {
+          currentMode.value = mode;
+          saveConfig();
+        };
+
+        const selectOnlyFailed = () => {
+          commandsList.value.forEach(c => { c.selected = !c.pass; });
+        };
+
+        const toggleSelectAll = () => {
+          const targetState = !isAllSelected.value;
+          commandsList.value.forEach(c => { c.selected = targetState; });
+        };
+
+        const onProviderChange = () => {
+          testMsg.value = '';
+          loadConfig();
+        };
+
+        const saveConfig = () => {
+          localStorage.setItem(`ggb_cfg_${selectedProviderId.value}`, JSON.stringify({
+            apiKey: apiKey.value,
+            model: currentModel.value
+          }));
+          localStorage.setItem('ggb_thinking_depth', thinkingDepth.value);
+          localStorage.setItem('ggb_current_mode', currentMode.value);
+        };
+
+        const loadConfig = () => {
+          const saved = localStorage.getItem(`ggb_cfg_${selectedProviderId.value}`);
+          if (saved) {
+            try {
+              const parsed = JSON.parse(saved);
+              apiKey.value = parsed.apiKey || '';
+              currentModel.value = parsed.model || currentProvider.value.defaultModel;
+            } catch(e) {
+              currentModel.value = currentProvider.value.defaultModel;
+            }
+          } else {
+            apiKey.value = '';
+            currentModel.value = currentProvider.value.defaultModel;
+          }
+          const savedDepth = localStorage.getItem('ggb_thinking_depth');
+          if (savedDepth && ['none', 'low', 'medium'].includes(savedDepth)) {
+            thinkingDepth.value = savedDepth;
+          } else {
+            thinkingDepth.value = 'none';
+          }
+          const savedMode = localStorage.getItem('ggb_current_mode');
+          if (savedMode) currentMode.value = savedMode;
+        };
+
+        const testConnection = async () => {
+          isTesting.value = true;
+          testMsg.value = '';
+          try {
+            const res = await fetch(currentProvider.value.baseUrl, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey.value.trim()}` },
+              body: JSON.stringify({ model: currentModel.value, messages: [{ role: 'user', content: 'Ping' }], max_tokens: 5 })
+            });
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            testSuccess.value = true;
+            testMsg.value = '✓ 连接成功';
+            showToast('API 连接测试成功', 'success');
+            saveConfig();
+          } catch (e) {
+            testSuccess.value = false;
+            testMsg.value = '✗ 失败: ' + e.message;
+            showToast('API 连接失败：' + e.message, 'error');
+          } finally {
+            isTesting.value = false;
+          }
+        };
+
+        const initGGB = (perspectiveCode = "1") => {
+          const container = document.getElementById('ggb-canvas-box');
+          if (!container || typeof window.GGBApplet === 'undefined') return;
+          container.innerHTML = '';
+
+          const params = {
+            appName: "classic",
+            width: container.clientWidth || 800,
+            height: container.clientHeight || 600,
+            showToolBar: true,
+            allowStyleBar: true,
+            showAlgebraInput: true,
+            showMenuBar: false,
+            perspective: perspectiveCode,
+            autoHeight: false,
+            disableAutoScale: true,
+            allowUpscale: true,
+            appletOnLoad: (api) => {
+              ggbApp = api;
+              nextTick(() => resizeGGB());
+            }
+          };
+          const applet = new GGBApplet(params, true);
+          applet.inject('ggb-canvas-box');
+        };
+
+        const hardResetGGB = () => {
+          if (ggbApp) {
+            try { ggbApp.newConstruction(); } catch(e) {}
+          }
+        };
+
+        const resetContextAndCanvas = () => {
+          chatMessages.value = [];
+          commandsList.value = [];
+          promptInput.value = '';
+          repairUserNote.value = '';
+          processPhase.value = '待命中';
+          processPhaseDetail.value = '画布与记忆已清空';
+          elapsedTime.value = 0;
+          progressPercent.value = 0;
+          estimatedTokens.value = 0;
+          hardResetGGB();
+          showToast('工作台画布与上下文已重置', 'info');
+        };
+
+        const setPerspectiveManually = (type) => {
+          if (!ggbApp) return;
+          currentPerspective.value = type;
+          ggbApp.setPerspective(type === '3d' ? "5" : "1");
+        };
+
+        const zoomInGraph = () => {
+          if (ggbApp) {
+            try { ggbApp.evalCommand("ZoomIn(1.25, (0, 0))"); } catch(e) {}
+          }
+        };
+        const zoomOutGraph = () => {
+          if (ggbApp) {
+            try { ggbApp.evalCommand("ZoomIn(0.8, (0, 0))"); } catch(e) {}
+          }
+        };
+        const resetView = () => {
+          if (ggbApp) {
+            try {
+              ggbApp.setStandardView();
+              ggbApp.evalCommand("CenterView((0, 0))");
+            } catch(e) {}
+          }
+        };
+
+        const resizeGGB = () => {
+          if (!ggbApp) return;
+          const box = document.getElementById('ggb-canvas-box');
+          if (box) {
+            const w = box.clientWidth;
+            const h = box.clientHeight;
+            if (w > 0 && h > 0) {
+              ggbApp.setSize(w, h);
+            }
+          }
+        };
+
+        const toggleFullscreen = async () => {
+          const canvasPane = document.querySelector('.canvas-pane');
+          const box = document.getElementById('ggb-canvas-box');
+
+          if (!isFullscreen.value) {
+            if (box) normalWidthBeforeFullscreen = box.clientWidth;
+            isFullscreen.value = true;
+
+            try {
+              if (canvasPane && canvasPane.requestFullscreen) {
+                await canvasPane.requestFullscreen();
+              }
+            } catch (e) {}
+
+            setTimeout(() => {
+              resizeGGB();
+              if (box && normalWidthBeforeFullscreen > 0 && box.clientWidth > normalWidthBeforeFullscreen) {
+                const ratio = box.clientWidth / normalWidthBeforeFullscreen;
+                if (ratio > 1.05) {
+                  try { ggbApp.evalCommand(`ZoomIn(${ratio.toFixed(2)}, (0, 0))`); } catch (e) {}
+                }
+              }
+            }, 120);
+          } else {
+            const currentFullWidth = box ? box.clientWidth : window.innerWidth;
+            isFullscreen.value = false;
+
+            try {
+              if (document.fullscreenElement && document.exitFullscreen) {
+                await document.exitFullscreen();
+              }
+            } catch (e) {}
+
+            setTimeout(() => {
+              resizeGGB();
+              if (box && normalWidthBeforeFullscreen > 0 && currentFullWidth > normalWidthBeforeFullscreen) {
+                const ratio = normalWidthBeforeFullscreen / currentFullWidth;
+                if (ratio < 0.95) {
+                  try { ggbApp.evalCommand(`ZoomIn(${ratio.toFixed(2)}, (0, 0))`); } catch (e) {}
+                }
+              }
+            }, 120);
+          }
+        };
+
+        const exportJPG = () => {
+          if (!ggbApp) return;
+          try {
+            let b64 = '';
+            if (typeof ggbApp.getPNGBase64 === 'function') {
+              b64 = ggbApp.getPNGBase64(2, false);
+            }
+            if (!b64 && typeof ggbApp.exportImage === 'function') {
+              b64 = ggbApp.exportImage({ type: 'png', scale: 2 });
+            }
+
+            if (b64) {
+              const src = b64.startsWith('data:') ? b64 : ('data:image/png;base64,' + b64);
+              const img = new Image();
+              img.onload = () => {
+                const canvas = document.createElement('canvas');
+                canvas.width = img.width;
+                canvas.height = img.height;
+                const ctx = canvas.getContext('2d');
+                ctx.fillStyle = '#ffffff';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.drawImage(img, 0, 0);
+
+                const jpgUrl = canvas.toDataURL('image/jpeg', 0.95);
+                const a = document.createElement('a');
+                a.href = jpgUrl;
+                a.download = `GeoGebra_Math_${Date.now()}.jpg`;
+                a.click();
+                showToast('已成功导出高清晰 JPG 图片', 'success');
+              };
+              img.src = src;
+            } else {
+              const box = document.getElementById('ggb-canvas-box');
+              const canvases = box ? box.querySelectorAll('canvas') : [];
+              if (canvases.length > 0) {
+                const mainC = canvases[0];
+                const outC = document.createElement('canvas');
+                outC.width = mainC.width;
+                outC.height = mainC.height;
+                const ctx = outC.getContext('2d');
+                ctx.fillStyle = '#ffffff';
+                ctx.fillRect(0, 0, outC.width, outC.height);
+                canvases.forEach(c => ctx.drawImage(c, 0, 0));
+                const jpgUrl = outC.toDataURL('image/jpeg', 0.95);
+                const a = document.createElement('a');
+                a.href = jpgUrl;
+                a.download = `GeoGebra_Math_${Date.now()}.jpg`;
+                a.click();
+                showToast('已成功导出高清晰 JPG 图片', 'success');
+              }
+            }
+          } catch(e) {
+            showToast('导出 JPG 图片失败：' + e.message, 'error');
+          }
+        };
+
+        const triggerFileInput = () => {
+          if (fileInputRef.value) fileInputRef.value.click();
+        };
+
+        const handleImageSelected = (e) => {
+          const file = e.target.files[0];
+          if (!file) return;
+          const reader = new FileReader();
+          reader.onload = (event) => {
+            uploadedImageBase64.value = event.target.result;
+            showToast('题目图片已附带至上下文', 'info');
+          };
+          reader.readAsDataURL(file);
+        };
+
+        const removeImage = () => {
+          uploadedImageBase64.value = '';
+          if (fileInputRef.value) fileInputRef.value.value = '';
+        };
+
+        const toggleVoiceInput = () => {
+          if (isRecording.value) {
+            if (speechRecognition) speechRecognition.stop();
+            isRecording.value = false;
+            return;
+          }
+
+          const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+          if (!SpeechRec) {
+            showToast('当前浏览器暂不支持语音识别接口，推荐使用 Chrome / Edge。', 'warning');
+            return;
+          }
+
+          speechRecognition = new SpeechRec();
+          speechRecognition.lang = 'zh-CN';
+          speechRecognition.continuous = true;
+          speechRecognition.interimResults = false;
+
+          speechRecognition.onstart = () => { 
+            isRecording.value = true;
+            showToast('正在聆听中，请清晰说出作图需求...', 'info');
+          };
+          speechRecognition.onresult = (event) => {
+            let transcript = '';
+            for (let i = event.resultIndex; i < event.results.length; ++i) {
+              if (event.results[i].isFinal) transcript += event.results[i][0].transcript;
+            }
+            if (transcript) {
+              promptInput.value = (promptInput.value ? promptInput.value + ' ' : '') + transcript;
+            }
+          };
+          speechRecognition.onerror = () => { 
+            isRecording.value = false; 
+            showToast('语音识别未捕获到有效声音', 'warning');
+          };
+          speechRecognition.onend = () => { isRecording.value = false; };
+          speechRecognition.start();
+        };
+
+        // 本地语法自动预愈合 (0ms 修正大小写函数等常见错误)
+        const quickLocalHeal = (cmdStr) => {
+          let s = cmdStr.trim();
+          s = s.replace(/\b(Sqrt|Sin|Cos|Tan|Abs|Exp|Ln|Log|Cosh|Sinh)\b/g, (m) => m.toLowerCase());
+          s = s.replace(/^([a-zA-Z0-9_]+)\s*=\s*([^=]+=[^=]+)$/, '$1: $2');
+          return s;
+        };
+
+        const executeSingleCommand = (item) => {
+          if (!ggbApp || !item.text.trim()) return;
+          let success = false;
+          try {
+            success = ggbApp.evalCommand(item.text.trim());
+          } catch(e) { success = false; }
+
+          if (!success) {
+            const healed = quickLocalHeal(item.text);
+            if (healed !== item.text) {
+              try {
+                success = ggbApp.evalCommand(healed);
+                if (success) {
+                  item.text = healed;
+                }
+              } catch(e) { success = false; }
+            }
+          }
+          item.pass = success;
+        };
+
+        const batchExecuteAll = (resetCanvas = false) => {
+          if (!ggbApp) return;
+          if (resetCanvas) ggbApp.newConstruction();
+          commandsList.value.forEach(item => {
+            if (item.text.trim()) executeSingleCommand(item);
+          });
+          showToast(resetCanvas ? '已重建所有指令并清空画布' : '已重新运行全部指令', 'info');
+        };
+
+        const addNewCommand = () => {
+          const raw = newCommandText.value.trim();
+          if (!raw) return;
+
+          const splitCmds = raw.split(/[\n;]+/).map(c => c.trim()).filter(Boolean);
+          splitCmds.forEach(cmdStr => {
+            const newItem = {
+              id: cmdIdCounter++,
+              text: cmdStr,
+              pass: false,
+              selected: false
+            };
+            commandsList.value.push(newItem);
+            executeSingleCommand(newItem);
+          });
+          newCommandText.value = '';
+        };
+
+        const removeCommand = (idx) => {
+          commandsList.value.splice(idx, 1);
+        };
+
+        // 极速纠错执行器 (掐断思考+限制300tokens)
+        const executeFastRepairCore = async (targetItems, userNote = '') => {
+          if (!targetItems || targetItems.length === 0) return true;
+
+          const existingContextCmds = commandsList.value
+            .filter(c => !targetItems.includes(c) && c.pass)
+            .map(c => c.text)
+            .join('\n');
+
+          let repairPrompt = `【待修复异常指令清单】：\n` + 
+            targetItems.map((t, i) => `${i + 1}. ${t.text}`).join('\n');
+
+          if (userNote.trim()) {
+            repairPrompt += `\n\n【用户修改要求】：\n${userNote.trim()}`;
+          }
+          if (existingContextCmds) {
+            repairPrompt += `\n\n【当前已有合法上下文】：\n${existingContextCmds}`;
+          }
+
+          const repairPayload = {
+            model: currentModel.value,
+            messages: [
+              { role: 'system', content: SYSTEM_PROMPT_TARGETED_FIX },
+              { role: 'user', content: repairPrompt }
+            ],
+            temperature: 0.0,
+            max_tokens: 300,
+            stream: false
+          };
+
+          if (selectedProviderId.value === 'dashscope') {
+            repairPayload.enable_thinking = false;
+          }
+
+          const res = await fetch(currentProvider.value.baseUrl, {
+            method: 'POST',
+            headers: { 
+              'Content-Type': 'application/json', 
+              'Authorization': `Bearer ${apiKey.value.trim()}` 
+            },
+            body: JSON.stringify(repairPayload)
+          });
+
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const data = await res.json();
+          let rawContent = data.choices?.[0]?.message?.content || "";
+          let cleanStr = rawContent.trim().replace(/```(?:json)?/gi, '').replace(/```/g, '').trim();
+
+          const startIdx = cleanStr.indexOf('[');
+          const endIdx = cleanStr.lastIndexOf(']');
+          if (startIdx === -1 || endIdx === -1) {
+            throw new Error("模型未返回合规数组");
+          }
+
+          const fixedCmds = JSON.parse(cleanStr.substring(startIdx, endIdx + 1));
+          targetItems.forEach((item, index) => {
+            if (fixedCmds[index]) {
+              item.text = fixedCmds[index].trim();
+              executeSingleCommand(item);
+              item.selected = false;
+            }
+          });
+
+          return true;
+        };
+
+        // 自动闭环自愈 (最多 3 次)
+        const runAutoHealingLoop = async (maxTries = 3) => {
+          let round = 1;
+          while (round <= maxTries) {
+            const failedItems = commandsList.value.filter(c => !c.pass);
+            if (failedItems.length === 0) return true;
+
+            processPhase.value = `自动纠错 (${round}/${maxTries})`;
+            processPhaseDetail.value = `正在极速自愈 ${failedItems.length} 条异常指令...`;
+            progressPercent.value = 85 + round * 4;
+
+            try {
+              await executeFastRepairCore(failedItems, '');
+            } catch (err) {
+              // 纠错内部降级
+            }
+
+            const stillFailed = commandsList.value.filter(c => !c.pass);
+            if (stillFailed.length === 0) return true;
+            round++;
+          }
+          return false;
+        };
+
+        const quickFixSingle = (item) => {
+          commandsList.value.forEach(c => c.selected = false);
+          item.selected = true;
+          handleManualTargetedRepair();
+        };
+
+        const handleManualTargetedRepair = async () => {
+          const targets = commandsList.value.filter(c => c.selected);
+          if (targets.length === 0) return;
+
+          if (!apiKey.value && selectedProviderId.value !== 'ollama') {
+            showToast('请先在顶部配置 API Key！', 'warning');
+            return;
+          }
+
+          isRepairing.value = true;
+          processPhase.value = '手动纠错中';
+          processPhaseDetail.value = `针对 ${targets.length} 条指令就地快速修复...`;
+
+          try {
+            saveConfig();
+            await executeFastRepairCore(targets, repairUserNote.value);
+            repairUserNote.value = '';
+            processPhase.value = '完成';
+            processPhaseDetail.value = '选定指令已更新至画布';
+            showToast('选定指令已极速修复并执行', 'success');
+          } catch(err) {
+            showToast('定向修复失败：' + err.message, 'error');
+          } finally {
+            isRepairing.value = false;
+          }
+        };
+
+        const applyGeneratedResult = (data, isIncremental = false) => {
+          if (!ggbApp) return;
+
+          if (!isIncremental) {
+            ggbApp.newConstruction();
+            commandsList.value = [];
+          }
+
+          if (data.viewConfig) {
+            const is3D = data.viewConfig.dimension === '3d';
+            currentPerspective.value = is3D ? '3d' : '2d';
+            ggbApp.setPerspective(is3D ? "5" : "1");
+
+            if (data.viewConfig.showAxes !== undefined) {
+              if (is3D) ggbApp.setAxesVisible(data.viewConfig.showAxes, data.viewConfig.showAxes, data.viewConfig.showAxes);
+              else ggbApp.setAxesVisible(data.viewConfig.showAxes, data.viewConfig.showAxes);
+            }
+            if (data.viewConfig.showGrid !== undefined) {
+              ggbApp.setGridVisible(data.viewConfig.showGrid);
+            }
+          }
+
+          (data.commands || []).forEach(cmd => {
+            const item = {
+              id: cmdIdCounter++,
+              text: cmd,
+              pass: false,
+              selected: false
+            };
+            commandsList.value.push(item);
+            executeSingleCommand(item);
+          });
+
+          if (data.styles && Array.isArray(data.styles)) {
+            data.styles.forEach(style => {
+              const t = style.target;
+              try {
+                if (ggbApp.exists(t)) {
+                  if (style.lineStyle !== undefined) ggbApp.setLineStyle(t, style.lineStyle);
+                  if (style.thickness !== undefined) ggbApp.setLineThickness(t, style.thickness);
+                  if (style.filling !== undefined) ggbApp.setFilling(t, style.filling);
+                  if (style.showLabel !== undefined) ggbApp.setLabelVisible(t, style.showLabel);
+                  if (style.trace !== undefined) ggbApp.setTrace(t, style.trace);
+                  if (style.color && Array.isArray(style.color)) ggbApp.setColor(t, style.color[0], style.color[1], style.color[2]);
+                  if (style.caption) {
+                    ggbApp.setCaption(t, style.caption);
+                    ggbApp.setLabelStyle(t, style.labelMode || 3);
+                    if (style.showLabel === undefined) ggbApp.setLabelVisible(t, true);
+                  }
+                }
+              } catch (e) {}
+            });
+          }
+
+          hasAnimation.value = false;
+          if (data.animationConfig) {
+            const slider = data.animationConfig.target;
+            if (ggbApp.exists(slider)) {
+              hasAnimation.value = true;
+              if (data.animationConfig.speed) ggbApp.setAnimationSpeed(slider, data.animationConfig.speed);
+              if (data.animationConfig.autoStart) ggbApp.startAnimation();
+            }
+          }
+        };
+
+        const parseAIResponse = (text) => {
+          let candidateStr = text.trim();
+          const jsonMatch = candidateStr.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+          if (jsonMatch) candidateStr = jsonMatch[1].trim();
+
+          try {
+            const parsed = JSON.parse(candidateStr);
+            if (parsed.commands && Array.isArray(parsed.commands)) return parsed;
+          } catch (e) {}
+
+          const firstBrace = candidateStr.indexOf('{');
+          const lastBrace = candidateStr.lastIndexOf('}');
+          if (firstBrace !== -1 && lastBrace !== -1) {
+            try {
+              const parsed = JSON.parse(candidateStr.substring(firstBrace, lastBrace + 1));
+              if (parsed.commands && Array.isArray(parsed.commands)) return parsed;
+            } catch (e) {}
+          }
+
+          const lines = text.split('\n');
+          const extractedCommands = [];
+          lines.forEach(line => {
+            let l = line.trim().replace(/^[\s",`]+|[\s",`;]+$/g, '');
+            if (!l || l.startsWith('```') || l.startsWith('#') || l.startsWith('//')) return;
+            const isGgbPattern = (l.includes('=') && !l.includes('":')) || 
+                                 (l.includes(':') && !l.includes('":') && !l.includes('http')) || 
+                                 /^(Point|Segment|Line|Ray|Circle|Ellipse|Hyperbola|Parabola|Function|Curve|Polygon|Vector|Slider|Plane|Sphere|Prism|Pyramid|Intersect|Midpoint)\s*\(/i.test(l);
+            if (isGgbPattern && !l.startsWith('{') && !l.endsWith('{')) {
+              extractedCommands.push(l);
+            }
+          });
+
+          return { commands: extractedCommands, styles: [] };
+        };
+
+        const handleGenerate = async () => {
+          if (!promptInput.value.trim() && !uploadedImageBase64.value) return;
+          if (!apiKey.value && selectedProviderId.value !== 'ollama') {
+            showToast('请先在顶部配置 API Key！', 'warning');
+            return;
+          }
+
+          isLoading.value = true;
+          elapsedTime.value = 0.0;
+          estimatedTokens.value = Math.ceil(promptInput.value.length * 1.3);
+          progressPercent.value = 15;
+          processPhase.value = '连接模型';
+          processPhaseDetail.value = '正在直连推理接口...';
+
+          const startTime = Date.now();
+          clearInterval(timerInterval);
+          timerInterval = setInterval(() => {
+            elapsedTime.value = (Date.now() - startTime) / 1000;
+          }, 100);
+
+          try {
+            saveConfig();
+            const currentPrompt = promptInput.value;
+            const isIncremental = chatMessages.value.length > 0;
+
+            let userContent = uploadedImageBase64.value
+              ? [
+                  { type: "text", text: currentPrompt || "请解析图像中的几何题并生成 GGB 指令。" },
+                  { type: "image_url", image_url: { url: uploadedImageBase64.value } }
+                ]
+              : currentPrompt;
+
+            const activeSystemPrompt = currentMode.value === 'free' ? SYSTEM_PROMPT_FREE : SYSTEM_PROMPT_CLASSIC;
+
+            // 深度与思考指令适配 (0思考/轻度思考/中度思考)
+            let depthSystemDirective = "";
+            if (thinkingDepth.value === 'none') {
+              depthSystemDirective = "\n【思考深度指令】：无须思考链(CoT)，极速秒级响应直接给出指令。";
+            } else if (thinkingDepth.value === 'low') {
+              depthSystemDirective = "\n【思考深度指令】：采用轻度思考深度，快速梳理基础代数与几何关系即可。";
+            } else if (thinkingDepth.value === 'medium') {
+              depthSystemDirective = "\n【思考深度指令】：采用中等思考深度，推导与构建平衡。";
+            }
+
+            let messagesToSend = [{ role: 'system', content: activeSystemPrompt + depthSystemDirective }];
+            messagesToSend.push(...chatMessages.value);
+            messagesToSend.push({ role: 'user', content: userContent });
+
+            const requestPayload = {
+              model: currentModel.value,
+              messages: messagesToSend,
+              stream: true,
+              temperature: currentMode.value === 'free' ? 0.0 : 0.1
+            };
+
+            // 适配推理参数
+            if (thinkingDepth.value !== 'none') {
+              const isReasoningModel = /o1|o3|r1|reason/i.test(currentModel.value);
+              if (isReasoningModel && ['low', 'medium'].includes(thinkingDepth.value)) {
+                requestPayload.reasoning_effort = thinkingDepth.value;
+              }
+              if (selectedProviderId.value === 'dashscope') {
+                requestPayload.enable_thinking = true;
+              }
+            } else {
+              if (selectedProviderId.value === 'dashscope') {
+                requestPayload.enable_thinking = false;
+              }
+            }
+
+            const res = await fetch(currentProvider.value.baseUrl, {
+              method: 'POST',
+              headers: { 
+                'Content-Type': 'application/json', 
+                'Authorization': `Bearer ${apiKey.value.trim()}` 
+              },
+              body: JSON.stringify(requestPayload)
+            });
+
+            if (!res.ok) throw new Error(`API 异常: HTTP ${res.status}`);
+
+            const reader = res.body.getReader();
+            const decoder = new TextDecoder("utf-8");
+            let fullText = "";
+            let reasoningStreamText = "";
+            let buffer = "";
+
+            processPhase.value = '指令装配';
+            processPhaseDetail.value = '正在接收并编译 GeoGebra 图元...';
+            progressPercent.value = 50;
+
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
+
+              buffer += decoder.decode(value, { stream: true });
+              const lines = buffer.split("\n");
+              buffer = lines.pop();
+
+              for (const line of lines) {
+                const trimmed = line.trim();
+                if (!trimmed || !trimmed.startsWith("data:")) continue;
+                const jsonStr = trimmed.replace(/^data:\s*/, "");
+                if (jsonStr === "[DONE]") continue;
+
+                try {
+                  const chunk = JSON.parse(jsonStr);
+                  const rDelta = chunk.choices?.[0]?.delta?.reasoning_content || "";
+                  const cDelta = chunk.choices?.[0]?.delta?.content || "";
+
+                  if (rDelta) reasoningStreamText += rDelta;
+                  if (cDelta) fullText += cDelta;
+
+                  const genLen = reasoningStreamText.length + fullText.length;
+                  estimatedTokens.value = Math.ceil(promptInput.value.length * 1.3 + genLen * 0.7);
+
+                  if (fullText.length > 20) {
+                    progressPercent.value = Math.min(85, 50 + Math.floor(fullText.length / 15));
+                  }
+                } catch (e) {}
+              }
+            }
+
+            processPhase.value = '图形渲染';
+            processPhaseDetail.value = '图元注入画板中...';
+            progressPercent.value = 90;
+
+            const parsedData = parseAIResponse(fullText);
+            applyGeneratedResult(parsedData, isIncremental);
+
+            // 自动闭环纠错（上限 3 次）
+            const hasFailures = commandsList.value.some(c => !c.pass);
+            if (hasFailures) {
+              isRepairing.value = true;
+              const healed = await runAutoHealingLoop(3);
+              isRepairing.value = false;
+              if (healed) {
+                processPhase.value = '完成 (自动自愈)';
+                processPhaseDetail.value = `构建完毕，异常指令已全部自动纠错成功`;
+                showToast('构建完毕，异常指令已自动自愈修复', 'success');
+              } else {
+                processPhase.value = '完成 (含残留异常)';
+                processPhaseDetail.value = `已自动自愈3轮，剩余 ${failedCount.value} 条指令可手动微调`;
+                showToast(`部分指令已自愈，剩余 ${failedCount.value} 条需手动微调`, 'warning');
+              }
+            } else {
+              processPhase.value = '完成';
+              processPhaseDetail.value = `构建完毕，已装配 ${commandsList.value.length} 条指令`;
+              showToast(`图形构建完成，共生成 ${commandsList.value.length} 条指令`, 'success');
+            }
+
+            progressPercent.value = 100;
+
+            chatMessages.value.push({ role: 'user', content: userContent });
+            chatMessages.value.push({ role: 'assistant', content: fullText });
+
+            const modeLabel = currentMode.value === 'free' ? '[自由] ' : '[经典] ';
+            const displayTitle = modeLabel + (currentPrompt || '几何作图');
+            historyList.value.unshift({
+              title: displayTitle.substring(0, 20) + (displayTitle.length > 20 ? '...' : ''),
+              time: new Date().toLocaleTimeString(),
+              data: parsedData
+            });
+            if (historyList.value.length > 8) historyList.value.pop();
+
+            removeImage();
+            promptInput.value = '';
+
+          } catch (err) {
+            processPhase.value = '异常中断';
+            processPhaseDetail.value = err.message;
+            showToast('生成或执行异常：' + err.message, 'error');
+          } finally {
+            isLoading.value = false;
+            isRepairing.value = false;
+            clearInterval(timerInterval);
+          }
+        };
+
+        const applySelectedPreset = () => {
+          if (selectedPresetIndex.value !== '') {
+            const p = presets.value[selectedPresetIndex.value];
+            if (p) promptInput.value = p.prompt;
+          }
+        };
+
+        const restoreHistory = (h) => {
+          applyGeneratedResult(h.data, false);
+          processPhase.value = '历史重载';
+          processPhaseDetail.value = `已载入历史记录：${h.title}`;
+          progressPercent.value = 100;
+          showToast(`已载入历史构型：${h.title}`, 'info');
+        };
+
+        const toggleAnim = (start) => ggbApp && (start ? ggbApp.startAnimation() : ggbApp.stopAnimation());
+
+        const exportGGB = () => ggbApp && (() => {
+          const b64 = ggbApp.getBase64();
+          const a = document.createElement('a');
+          a.href = 'data:application/vnd.geogebra.file;base64,' + b64;
+          a.download = `GeoGebra_Export_${Date.now()}.ggb`;
+          a.click();
+          showToast('已开始下载 .ggb 工程文件', 'success');
+        })();
+
+        onMounted(() => {
+          loadConfig();
+          nextTick(() => {
+            initGGB();
+          });
+
+          const box = document.getElementById('ggb-canvas-box');
+          if (window.ResizeObserver && box) {
+            resizeObserver = new ResizeObserver((entries) => {
+              for (let entry of entries) {
+                const { width, height } = entry.contentRect;
+                if (width > 0 && height > 0 && ggbApp) {
+                  ggbApp.setSize(Math.floor(width), Math.floor(height));
+                }
+              }
+            });
+            resizeObserver.observe(box);
+          }
+
+          window.addEventListener('resize', resizeGGB);
+          
+          document.addEventListener('fullscreenchange', () => {
+            const isNowFull = !!document.fullscreenElement;
+            if (isFullscreen.value !== isNowFull) {
+              isFullscreen.value = isNowFull;
+              setTimeout(() => {
+                resizeGGB();
+                if (!isNowFull && normalWidthBeforeFullscreen > 0 && box) {
+                  const currentW = box.clientWidth;
+                  if (currentW < window.innerWidth) {
+                    const ratio = currentW / window.innerWidth;
+                    if (ratio < 0.95) {
+                      try { ggbApp.evalCommand(`ZoomIn(${ratio.toFixed(2)}, (0, 0))`); } catch(e) {}
+                    }
+                  }
+                }
+              }, 120);
+            }
+          });
+
+          window.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && isFullscreen.value) {
+              toggleFullscreen();
+            }
+          });
+        });
+
+        return {
+          providers, selectedProviderId, currentModel, apiKey, currentProvider,
+          thinkingDepth, currentMode, setMode,
+          isTesting, testSuccess, testMsg, testConnection, onProviderChange, saveConfig,
+          toasts, showToast,
+          conversationTurns, resetContextAndCanvas,
+          presets, selectedPresetIndex, applySelectedPreset,
+          promptInput, isLoading, isRepairing, repairUserNote,
+          processPhase, processPhaseDetail, elapsedTime, estimatedTokens, progressPercent,
+          historyList, restoreHistory,
+          commandsList, newCommandText, executeSingleCommand, batchExecuteAll,
+          addNewCommand, removeCommand, quickFixSingle, handleManualTargetedRepair,
+          failedCount, selectedCount, isAllSelected, selectOnlyFailed, toggleSelectAll,
+          hasAnimation, toggleAnim, hardResetGGB, exportGGB, exportJPG,
+          currentPerspective, setPerspectiveManually,
+          zoomInGraph, zoomOutGraph, resetView,
+          isFullscreen, toggleFullscreen,
+          uploadedImageBase64, fileInputRef, triggerFileInput, handleImageSelected, removeImage,
+          isRecording, toggleVoiceInput, handleGenerate
+        };
+      }
+    }).mount('#app');
+  </script>
+</body>
+</html>
